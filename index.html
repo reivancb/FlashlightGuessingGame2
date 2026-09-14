@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detective Flashlight Guessing Game</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --panel-bg: #1e1e1e;
+            --text-light: #e0e0e0;
+            --accent-gold: #d4af37;
+            --accent-gold-hover: #b89628;
+            
+            /* Dynamic Flashlight Parameters */
+            --spotlight-x: 50vw;
+            --spotlight-y: 50vh;
+            --spotlight-radius: 120px;
+            --spotlight-brightness: 1;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Top Bar Header Controls */
+        header {
+            height: 60px;
+            background-color: var(--panel-bg);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 2px solid #333;
+            z-index: 20;
+        }
+
+        .title {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: var(--accent-gold);
+            letter-spacing: 1px;
+        }
+
+        .controls-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-control {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+        }
+
+        .slider-control input[type="range"] {
+            cursor: pointer;
+            accent-color: var(--accent-gold);
+            width: 90px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        button {
+            background-color: var(--accent-gold);
+            color: #121212;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--accent-gold-hover);
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.97);
+        }
+
+        button:disabled {
+            background-color: #444;
+            color: #777;
+            cursor: not-allowed;
+        }
+
+        button.setup-btn {
+            background-color: #333;
+            color: var(--text-light);
+            border: 1px solid #555;
+        }
+
+        button.setup-btn:hover:not(:disabled) {
+            background-color: #444;
+        }
+
+        button.active-toggle {
+            background-color: #2563eb;
+            color: #ffffff;
+        }
+
+        button.active-toggle:hover:not(:disabled) {
+            background-color: #1d4ed8;
+        }
+
+        /* Game Area Canvas */
+        .game-viewport {
+            flex-grow: 1;
+            position: relative;
+            width: 100vw;
+            height: calc(100vh - 60px);
+            background-color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: none; /* Hide standard cursor inside viewport */
+        }
+
+        .hidden-image {
+            max-width: 90vw;
+            max-height: 85vh;
+            object-fit: contain;
+            pointer-events: none;
+            display: block;
+        }
+
+        /* Radial Darkness Overlay with Dynamic Light Cone */
+        .darkness-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(
+                circle var(--spotlight-radius) at var(--spotlight-x) var(--spotlight-y),
+                rgba(0, 0, 0, calc(1 - var(--spotlight-brightness))) 0%,
+                rgba(0, 0, 0, 0.98) 100%
+            );
+            transition: opacity 0.3s ease;
+        }
+
+        .darkness-overlay.revealed {
+            opacity: 0;
+        }
+
+        /* Initial/Empty Message Overlay */
+        .empty-state {
+            position: absolute;
+            text-align: center;
+            color: #888;
+            font-size: 1.5rem;
+            pointer-events: none;
+        }
+
+        /* Game Setup Modal Drawer */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .setup-modal {
+            background-color: var(--panel-bg);
+            border: 2px solid var(--accent-gold);
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90vw;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+
+        .setup-modal h2 {
+            margin-top: 0;
+            color: var(--accent-gold);
+            font-size: 1.5rem;
+            border-bottom: 1px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+
+        .file-input {
+            width: 100%;
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px dashed var(--accent-gold);
+            color: var(--text-light);
+            cursor: pointer;
+        }
+
+        .preview-counter {
+            font-size: 0.9rem;
+            color: #aaa;
+            margin-top: 6px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="title">🔍 Detective Flashlight</div>
+        
+        <div class="controls-group">
+            <div class="slider-control">
+                <label for="sizeSlider">Beam:</label>
+                <input type="range" id="sizeSlider" min="50" max="350" value="130">
+            </div>
+
+            <div class="slider-control">
+                <label for="brightnessSlider">Light:</label>
+                <input type="range" id="brightnessSlider" min="0.2" max="1" step="0.05" value="0.95">
+            </div>
+
+            <div class="btn-group">
+                <button id="modeToggleBtn" onclick="toggleAutoMode()">🤖 Auto Motion</button>
+                <button id="revealBtn" onclick="toggleReveal()" disabled>👁️ Reveal</button>
+                <button class="setup-btn" onclick="openModal()">⚙️ Setup</button>
+                <button id="nextBtn" onclick="nextRound()" disabled>Next ➡️</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="game-viewport" id="viewport">
+        <img id="gameImage" class="hidden-image" src="" alt="Detective Target" style="display: none;">
+        <div class="darkness-overlay" id="darknessOverlay"></div>
+        
+        <div class="empty-state" id="emptyState">
+            No images uploaded yet.<br>Click <strong>⚙️ Setup</strong> to load cases!
+        </div>
+    </div>
+
+    <!-- Setup Modal -->
+    <div class="modal-overlay" id="setupModal">
+        <div class="setup-modal">
+            <h2>Game Setup - Evidence File</h2>
+            <div class="form-group">
+                <label for="imageUpload">Upload Images (Select Multiple):</label>
+                <input type="file" id="imageUpload" class="file-input" accept="image/*" multiple onchange="handleFileSelect(this)">
+                <div class="preview-counter" id="fileCount">0 files chosen</div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="setup-btn" onclick="closeModal()">Cancel</button>
+                <button onclick="applyNewImages()">Start Investigation</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // State variables
+        let uploadedImages = [];
+        let remainingPool = [];
+        let currentImage = null;
+        let selectedFilesTemp = [];
+        
+        let isRevealed = false;
+        let isAutoMode = false;
+        let autoAnimFrame = null;
+
+        // Auto move positions
+        let currentX = window.innerWidth / 2;
+        let currentY = window.innerHeight / 2;
+        let targetX = currentX;
+        let targetY = currentY;
+
+        // DOM elements
+        const viewport = document.getElementById('viewport');
+        const gameImage = document.getElementById('gameImage');
+        const emptyState = document.getElementById('emptyState');
+        const nextBtn = document.getElementById('nextBtn');
+        const revealBtn = document.getElementById('revealBtn');
+        const modeToggleBtn = document.getElementById('modeToggleBtn');
+        const darknessOverlay = document.getElementById('darknessOverlay');
+        const sizeSlider = document.getElementById('sizeSlider');
+        const brightnessSlider = document.getElementById('brightnessSlider');
+        const setupModal = document.getElementById('setupModal');
+        const fileCount = document.getElementById('fileCount');
+
+        // Mouse motion listener (Manual Mode)
+        viewport.addEventListener('mousemove', (e) => {
+            if (isAutoMode) return;
+            const rect = viewport.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            setSpotlightPos(x, y);
+        });
+
+        function setSpotlightPos(x, y) {
+            document.documentElement.style.setProperty('--spotlight-x', `${x}px`);
+            document.documentElement.style.setProperty('--spotlight-y', `${y}px`);
+        }
+
+        // Toggle Reveal
+        function toggleReveal() {
+            isRevealed = !isRevealed;
+            if (isRevealed) {
+                darknessOverlay.classList.add('revealed');
+                revealBtn.innerText = '🙈 Hide';
+            } else {
+                darknessOverlay.classList.remove('revealed');
+                revealBtn.innerText = '👁️ Reveal';
+            }
+        }
+
+        // Toggle Auto vs Manual Flashlight Motion
+        function toggleAutoMode() {
+            isAutoMode = !isAutoMode;
+            if (isAutoMode) {
+                modeToggleBtn.classList.add('active-toggle');
+                modeToggleBtn.innerText = '🖱️ Manual Motion';
+                startAutoMotion();
+            } else {
+                modeToggleBtn.classList.remove('active-toggle');
+                modeToggleBtn.innerText = '🤖 Auto Motion';
+                stopAutoMotion();
+            }
+        }
+
+        function startAutoMotion() {
+            pickNewTargetPos();
+            animateAutoStep();
+        }
+
+        function stopAutoMotion() {
+            if (autoAnimFrame) {
+                cancelAnimationFrame(autoAnimFrame);
+                autoAnimFrame = null;
+            }
+        }
+
+        function pickNewTargetPos() {
+            const rect = viewport.getBoundingClientRect();
+            const padding = 100;
+            targetX = Math.random() * (rect.width - padding * 2) + padding;
+            targetY = Math.random() * (rect.height - padding * 2) + padding;
+
+            // Pick a new target periodically
+            if (isAutoMode) {
+                const nextDelay = 1500 + Math.random() * 2000;
+                setTimeout(pickNewTargetPos, nextDelay);
+            }
+        }
+
+        function animateAutoStep() {
+            if (!isAutoMode) return;
+
+            // Smooth ease toward target coordinates
+            currentX += (targetX - currentX) * 0.04;
+            currentY += (targetY - currentY) * 0.04;
+
+            setSpotlightPos(currentX, currentY);
+
+            autoAnimFrame = requestAnimationFrame(animateAutoStep);
+        }
+
+        // Dynamic slider updates
+        sizeSlider.addEventListener('input', (e) => {
+            document.documentElement.style.setProperty('--spotlight-radius', `${e.target.value}px`);
+        });
+
+        brightnessSlider.addEventListener('input', (e) => {
+            document.documentElement.style.setProperty('--spotlight-brightness', e.target.value);
+        });
+
+        // Setup modal controls
+        function openModal() {
+            setupModal.classList.add('open');
+        }
+
+        function closeModal() {
+            setupModal.classList.remove('open');
+        }
+
+        function handleFileSelect(input) {
+            const files = Array.from(input.files);
+            selectedFilesTemp = files;
+            fileCount.innerText = `${files.length} file(s) chosen`;
+        }
+
+        function applyNewImages() {
+            if (selectedFilesTemp.length === 0) {
+                closeModal();
+                return;
+            }
+
+            uploadedImages = [];
+            let loadedCount = 0;
+
+            selectedFilesTemp.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    uploadedImages.push(e.target.result);
+                    loadedCount++;
+
+                    if (loadedCount === selectedFilesTemp.length) {
+                        closeModal();
+                        remainingPool = [...uploadedImages];
+                        nextBtn.disabled = false;
+                        revealBtn.disabled = false;
+                        nextRound();
+                    }
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Core Game Logic: Non-repeating random selection
+        function nextRound() {
+            if (uploadedImages.length === 0) return;
+
+            // Reset reveal state on new round
+            isRevealed = false;
+            darknessOverlay.classList.remove('revealed');
+            revealBtn.innerText = '👁️ Reveal';
+
+            // Refill pool if empty
+            if (remainingPool.length === 0) {
+                remainingPool = [...uploadedImages];
+            }
+
+            // Select random image
+            const randomIndex = Math.floor(Math.random() * remainingPool.length);
+            currentImage = remainingPool.splice(randomIndex, 1)[0];
+
+            // Render selected image
+            gameImage.src = currentImage;
+            gameImage.style.display = 'block';
+            emptyState.style.display = 'none';
+        }
+    </script>
+</body>
+</html>
